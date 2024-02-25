@@ -1,0 +1,311 @@
+#!/bin/bash
+
+UUID=''
+DEV_CD='/dev/sr0'
+STORAGE='/mnt/t3n3/PWWR/CDVD/ef2bedee-ce53-11ee-a13d-001c250ed249_PWWR_pack_5'
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+FN_CDVD_TEX="$SCRIPT_DIR"/tex/lbl2pdf
+
+LIST_FN="$STORAGE"/../PWWR_CDVD.list
+
+cd "$SCRIPT_DIR"
+cd "$STORAGE"
+
+
+###################################
+# parse args
+###################################
+display_help() {
+	echo "\
+
+cdvdd syntax
+  options:
+    -? -h --help    print this help and exit
+    -u --uuid       specify uuid (create new if not specified)
+    -p --path       specify path to dir to save (default: '$STORAGE')
+    -d --dev        specify device (default: '$DEV_CD')
+"
+}
+
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		-h|-\?|--help)
+	  display_help
+      exit 0
+      ;;
+    -u|--uuid)
+      UUID="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -p|--path)
+      STORAGE="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -d|--dev)
+      DEV_CD="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    # *)
+      # POSITIONAL_ARGS+=("$1") # save positional arg
+      # shift # past argument
+      # ;;
+  esac
+done
+
+# set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
+
+echo '=========================================================='
+echo -n 'STORAGE:'; pwd
+echo "UUID:   ${UUID}"
+echo "DEV_CD: ${DEV_CD}"
+echo '=========================================================='
+
+###################################
+confirm () {
+	echo "$1"
+	read -r -p "$2 [y/N]" __response
+	[[ "$__response" =~ (^[yY][eE][sS]|[yY])$ ]]
+}
+keep_old_file () {
+	[ ! -s "$1" ] && return 1
+	confirm "$1 exists." 'Keep old file?'
+}
+HR='------------------------------------'
+
+fin_add2list () {
+	read -r -p 'add simple handle (like number) to general list >' __list_handle
+	echo "$UUID  $__list_handle" >>"$LIST_FN"
+}
+
+
+###################################
+# MAIN
+while :; do
+	confirm "TAKE A PICTURE OF DISK and insert the disk ['$DEV_CD']" 'Done?' && break
+done
+
+# check disk
+BLKID_OUT=$(blkid "$DEV_CD") \
+	|| { 
+	echo "blkid: error $?. no disk?" 1>&2; 
+	exit 1;
+	}
+echo $BLKID_OUT
+echo "[$DEV_CD]"
+ISOINFO_OUT="$(isoinfo -debug -d -i "$DEV_CD" 2>&1)"
+
+
+# new or edit?
+	echo '=========================================================='
+	echo "UUID:   ${UUID}"
+	echo "DEV_CD: ${DEV_CD}"
+	echo '=========================================================='
+STATE='new'
+if [ -z "$UUID" ]; then
+	UUID=$(uuidgen -t)
+else
+	re_hex='[0-9a-f]'
+	if [[ "$UUID" =~ ^$re_hex{8}-$re_hex{4}-$re_hex{4}-$re_hex{4}-$re_hex{12}$ ]]; then
+		__filelist="$(ls -1 $UUID*)"
+		if [ ! -z "$__filelist" ]; then
+			echo '----------- now exists: ------------'
+			echo "$__filelist"
+			if confirm "$HR" "Edit or add something?"; then
+				STATE='edit'
+			else exit 3
+			fi
+		fi
+	else
+		echo 'argument is not in UUID format' 1>&2
+		exit 2
+	fi
+fi
+
+echo $STATE
+echo $UUID
+echo '===================================='
+
+
+## INFO
+
+FN_BLKID="$UUID.blkid"
+echo "$FN_BLKID"
+echo "new:"
+echo "$BLKID_OUT" 
+if [ "$STATE" == 'edit' ] && [ -s "$FN_BLKID" ]; then
+	__blkid_old="$(cat $FN_BLKID)"
+	if [ "$__blkid_old" == "$BLKID_OUT" ]; then
+		echo "same as old."
+	else
+		echo "old:"
+		cat "$FN_BLKID"
+		confirm '' "Keep old file?" \
+		|| echo "$BLKID_OUT" >"$FN_BLKID"
+	fi
+else
+		echo "$BLKID_OUT" >"$FN_BLKID"
+fi
+
+
+FN_ISOINFO="$UUID.isoinfo"
+echo "$FN_ISOINFO"
+echo "new:"
+echo "$ISOINFO_OUT" 
+if [ "$STATE" == 'edit' ] && [ -s "$FN_ISOINFO" ]; then
+	__isoinfo_old="$(cat $FN_ISOINFO)"
+	if [ "$__isoinfo_old" == "$ISOINFO_OUT" ]; then
+		echo "same as old."
+	else
+		echo "old:"
+		cat "$FN_ISOINFO"
+		confirm '' "Keep old file?" \
+		|| echo "$ISOINFO_OUT" >"$FN_ISOINFO"
+	fi
+else
+		echo "$ISOINFO_OUT" >"$FN_ISOINFO"
+fi
+
+echo $HR
+
+############################
+# MOUNT
+if ! confirm "WILL MOUNT $DEV_CD /mnt/cdvd" 'Omit it and proceed to dd cloning?'; then
+	sudo mount "$DEV_CD" /mnt/cdvd
+
+echo 'ROOT DIR: ls /mnt/cdvd'
+ls /mnt/cdvd
+
+# OLRS
+	OLRS_PID=''
+	if ! confirm 'Will read OLRS list. It takes time' 'Omit it?'; then
+		FN_OLRS="$UUID.olrs"
+		TMP_OLRS="/tmp/$FN_OLRS"
+		rm -f "$TMP_OLRS"
+
+		olrs /mnt/cdvd >"$TMP_OLRS" &
+		OLRS_PID=$!
+
+		echo "Ok, reading in background (PID: $OLRS_PID). It takes time. Meanwhile..."
+	fi
+
+# PHOTO
+	FN_PHOTO="$UUID".jpg
+	[ -s "$FN_PHOTO" ] \
+		&& echo "Disk photo file exists."
+	while :; do 
+		confirm "$FN_PHOTO" 'Save photo of disk - Done?' && break
+	done
+
+# LABEL
+	FN_LBL="$UUID".lbl
+	__update_label=true
+	if [ "$STATE" == 'edit' ] && [ -s "$FN_LBL" ]; then
+		echo "$FN_LBL exists."
+		echo $HR
+		cat "$FN_LBL"
+		echo $HR
+		confirm '' 'Keep it?' && __update_label=false
+	fi
+	if $__update_label; then
+		vim "$FN_LBL"
+		
+#		__response='nop'
+#		while ! [[ "$__response" =~ (^[yY][eE][sS]|[yY])$ ]]; do
+#			echo       '              ==========================================                                          |'
+#			read -r -p "DISK LABEL  > " DISK_LBL
+#			read -r -p "explanation > " DISK_LBL_MORE
+#			echo '=========================================='
+#			echo "$DISK_LBL"
+#			echo '------------------------------------------'
+#			echo "$DISK_LBL_MORE"
+#			echo '=========================================='
+#			read -r -p "Correct? [y/N]" __response
+#		done
+#		echo "$DISK_LBL" >"$FN_LBL"
+#		echo "$DISK_LBL_MORE" >>"$FN_LBL"
+	fi		
+
+# PRINT
+
+# UMOUNT
+	if [ ! -z $OLRS_PID ]; then
+		echo "Wait for OLRS (PID: $OLRS_PID)..."
+		pstree -p $OLRS_PID
+		wait $OLRS_PID
+
+		if [ "$STATE" == 'edit' ] && [ -s "$FN_OLRS" ]; then
+			echo "$FN_OLRS exists. diff:"
+			echo $hr
+			diff "$TMP_OLRS" "$FN_OLRS"
+			echo $hr
+			confirm '' 'Keep old?' \
+				mv "$TMP_OLRS" "$FN_OLRS"
+		else
+			mv "$TMP_OLRS" "$FN_OLRS"
+		fi
+	fi
+	while ! sudo umount -l /mnt/cdvd; do
+		confirm 'Umount failed' 'Stop trying and exit?' \
+		       && exit 4	
+	done
+fi
+
+confirm 'And now ddancing...' 'Exit, may be?' && exit
+
+"$FN_CDVD_TEX" "$UUID" "$(pwd)" &
+echo '(meanwhile print the wrapper)'
+
+# DD
+
+FN_ISO="$UUID".dd
+keep_old_file "$FN_ISO" \
+	|| dd if="$DEV_CD" of="$FN_ISO" status=progress
+
+# MD5 CHECK
+FN_MD5="$FN_ISO".md5
+echo 'Will compare md5...'
+if ! keep_old_file "$FN_MD5"; then
+	md5sum "$FN_ISO" >"$FN_MD5" &
+	MD5_PID=$!
+fi
+[ -e /tmp/sr0.md5 ] && rm -f /tmp/sr0.md5
+if md5sum /dev/sr0 >/tmp/sr0.md5; then
+	[ ! -v $MD5_PID ] \
+		&& echo "wait PID: $MD5_PID" \
+		&& wait $MD5_PID
+	echo "diff md5s: $FN_MD5 $DEV_CD"
+	diff "$FN_MD5" /tmp/sr0.md5
+	diff <(cut -f1 -d ' ' "$FN_MD5") <(cut -f1 -d' ' /tmp/sr0.md5) \
+		&& echo 'md5s are same' \
+		&& fin_add2list \
+		&& exit
+fi
+
+confirm 'MD5 COMPARISON FAILED, WILL COMPARE BY OLRS' 'Or exit?' && exit
+FN_DDOLRS="$UUID".dd.olrs
+sudo umount /mnt/tmp
+sudo mount -o ro "$FN_ISO" /mnt/tmp
+[ -e "$FN_DDOLRS" ] && rm -f "$FN_DDOLRS"
+olrs /mnt/tmp >"$FN_DDOLRS"
+diff "$FN_OLRS" "$FN_DDOLRS" \
+	&& echo ".olrs are same!" \
+	&& rm "$FN_DDOLRS" \
+	&& fin_add2list
+if confirm '' "keep $FN_ISO mounted to /mnt/tmp ?"; then
+	echo 'you should unmount it youself later:'
+	echo 'sudo umount /mnt/tmp'
+else
+	sudo umount /mnt/tmp
+fi
+
+
