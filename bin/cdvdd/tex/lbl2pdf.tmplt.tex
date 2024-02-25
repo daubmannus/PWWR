@@ -1,0 +1,85 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+\documentclass[10pt]{article}
+\usepackage{xltxtra} % loads: fixltx2e, metalogo, xunicode, fontspec
+\usepackage{alltt}
+\usepackage{scrextend}
+\usepackage[a4paper,top=2cm,bottom=8.5cm,left=5cm,right=5cm]{geometry}
+\defaultfontfeatures{Mapping=tex-text}
+\setmainfont{IBMPlexMonoMedium}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% https://tex.stackexchange.com/questions/300207/repeat-characters-n-times
+
+\makeatletter
+\newcount\my@repeat@count
+\newcommand{\myrepeat}[2]{%
+  \begingroup
+  \my@repeat@count=\z@
+  \@whilenum\my@repeat@count<#1\do{#2\advance\my@repeat@count\@ne}%
+  \endgroup
+}
+\makeatother
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{document}
+
+
+\thispagestyle{empty} % to suppress page numbering
+
+\begin{addmargin}[10em]{0em}
+\begin{alltt}
+\rmfamily
+~~~~~~~~~~~~~~~~~~~~
+ EX DISCIS PIVOVARI
+~~~~~~~~~~~~~~~~~~~~
+        із 
+      дисків
+Анатолія Васильовича
+  П И В О В А Р А
+~~~~~~~~~~~~~~~~~~~~
+
+
+
+
+
+
+
+
+
+
+
+~~~~~~~~~~~~~~~~~~~~
+ EX DISCIS PIVOVARI
+~~~~~~~~~~~~~~~~~~~~
+     із дисків
+Анатолія Васильовича
+  П И В О В А Р А
+~~~~~~~~~~~~~~~~~~~~
+\end{alltt}
+\end{addmargin}
+
+\begin{center}
+%%UUID%%\\
+\vspace{5mm}
+\includegraphics[scale=1]{%%UUID%%}
+
+\vspace{3mm}
+\begin{addmargin}[10mm]{0em}
+
+\centerline{\myrepeat{42}{\textasciitilde}}
+
+\parbox[c][15mm][c]{90mm}{
+\begin{center}
+%%LABEL_MAIN%%\\
+%%LABEL_EXPLANATION%%
+\end{center}
+}
+\vspace{0.5mm}
+
+\centerline{\myrepeat{42}{\textasciitilde}}
+
+\end{addmargin}
+\end{center}
+\end{document}

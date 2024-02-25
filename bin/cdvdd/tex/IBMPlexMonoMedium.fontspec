@@ -1,0 +1,6 @@
+\defaultfontfeatures[IBMPlexMonoMedium]
+  {
+    Extension = .ttf ,
+	UprightFont = IBMPlexMono-Medium,
+	ItalicFont = IBMPlexMono-MediumItalic,
+  }

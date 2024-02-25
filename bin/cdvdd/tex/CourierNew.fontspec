@@ -1,0 +1,9 @@
+\defaultfontfeatures[CourierNew]
+  {
+    Extension = .ttf ,
+	UprightFont = cour,
+	% BoldFont = courbd,
+	% ItalicFont = couri,
+	% BoldItalicFont = courbi,
+	% <any other desired options>﻿
+  }

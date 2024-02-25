@@ -1,0 +1,61 @@
+#!/bin/bash
+
+UUID="$1"
+STORAGE="$2"
+
+OUT_DIR='/home/ganka/transfer'
+
+LOG="$OUT_DIR/$UUID.lbl2pdf.log"
+
+BKP_DIR="$UUID.lbl2pdf.bkp"
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+FN_TMPLT="$SCRIPT_DIR"/lbl2pdf.tmplt.tex
+
+log () {
+	echo "$@" >>"$LOG"
+}
+HR='------------------------------------------'
+
+# INIT clean
+cd "$OUT_DIR"
+GLOBIGNORE="$UUID.lbl2pdf.bkp"
+[ -e "$BKP_DIR" ] || mkdir "$BKP_DIR"
+mv "$UUID"* "$BKP_DIR"
+
+# init log
+log "$(date +'%Y-%m-%d %H:%M:%S (%:z)')"; log $HR
+
+# create QR
+zint -o "$UUID".eps -b QRCODE -d "$UUID"
+
+# READ LBL
+
+cd "$STORAGE"
+FN_LBL="$UUID".lbl
+
+log "$FN_LBL"; log $HR; log "$(cat "$FN_LBL")"; log $HR
+
+LABEL_MAIN="$(head -1 "$FN_LBL")"
+LABEL_EXPLANATION="$(head -2 "$FN_LBL" | tac | head -1)"
+
+cd "$OUT_DIR" 
+
+# make .tex
+FN_TEX="$UUID.tex"
+cp "$FN_TMPLT" "$FN_TEX"
+
+perl -i -pe "s/%%UUID%%/$UUID/g" "$FN_TEX"
+perl -i -pe "s{%%LABEL_MAIN%%}{$LABEL_MAIN}g" "$FN_TEX"
+perl -i -pe "s{%%LABEL_EXPLANATION%%}{$LABEL_EXPLANATION}g" "$FN_TEX"
+
+log "XeLaTeX"; log $HR
+
+xelatex -interaction=nonstopmode "$FN_TEX" >>"$LOG"
+
+#EXIT clean
+cd "$OUT_DIR" 
+GLOBIGNORE="$GLOBIGNORE:$UUID.lbl2pdf.log:$UUID.pdf"
+mv "$UUID"* "$BKP_DIR"
+
+
